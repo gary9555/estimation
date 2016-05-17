@@ -71,10 +71,15 @@ if (tm == 0)
     estState.prev_t = 0; 
     
     % variance vector
+%     estState.var = [ 0.4    0   0     0;       % orientation variance 
+%                       0   0.33  0     0;      % x variance
+%                       0     0  0.33   0;      % y variance
+%                       0     0   0     0.1 ] ;    % radius variance
     estState.var = [ 0.05    0   0     0;       % orientation variance 
-                      0   0.05  0     0;      % x variance
-                      0     0  0.05   0;      % y variance
-                      0     0   0     0.05 ] ;    % radius variance
+                      0   0.4  0     0;      % x variance
+                      0     0  0.4   0;      % y variance
+                      0     0   0     0.0005 ] ;    % radius variance
+    
     % Output
     posEst = [estState.est(2) estState.est(3)];
     oriEst = estState.est(1);
@@ -123,7 +128,7 @@ L_t = [ -W * u_v * sin(u_r) / B         -W * u_v * cos(u_r) / B;
                    0                                0               ]; 
 
 P_p = estState.var;
-P_p = P_p  +  A_t * P_p  +  P_p * transpose(A_t)  +  L_t * [Q_v 0; 0 Q_r] * transpose(L_t);
+P_p = P_p  +  delta_t * (A_t * P_p  +  P_p * transpose(A_t)  +  L_t * [Q_v 0; 0 Q_r] * transpose(L_t));
               
                
 %%%%%%% measurement update %%%%%%%%
@@ -160,7 +165,7 @@ estState.est(4) = max(estState.est(4),0.05);
 estState.prev_t = tm;
 
 % Replace the following:
-posEst = [estState.est(2) estState.est(2)];
+posEst = [estState.est(2) estState.est(3)];
 oriEst = estState.est(1);
 posVar = [estState.var(2,2) estState.var(3,3)];
 oriVar = estState.var(1,1);
