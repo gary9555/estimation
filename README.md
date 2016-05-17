@@ -1,6 +1,4 @@
-# estimation
-
-function [posEst,oriEst,radiusEst, posVar,oriVar,radiusVar,estState] = Estimator(estState,actuate,sense,tm,estConst)
+function [posEst,oriEst,radiusEst, posVar,oriVar,radiusVar,estState] = Estimator(estState,actuate,sense,tm,estConst,n)
 % [posEst,oriEst,posVar,oriVar,baseEst,baseVar,estState] =
 % 	Estimator(estState,actuate,sense,tm,knownConst,designPart)
 %
@@ -73,17 +71,17 @@ if (tm == 0)
     estState.prev_t = 0; 
     
     % variance vector
-    estState.var = [ 0.4;       % orientation variance 
-                     0.33;      % x variance
-                     0.33;      % y variance
-                     0.01 ] ;    % radius variance
+    estState.var = [ 0.05    0   0     0;       % orientation variance 
+                      0   0.05  0     0;      % x variance
+                      0     0  0.05   0;      % y variance
+                      0     0   0     0.05 ] ;    % radius variance
     % Output
     posEst = [estState.est(2) estState.est(3)];
     oriEst = estState.est(1);
-    posVar = [estState.var(2) estState.var(3)];
-    oriVar = estState.var(1);
+    posVar = [estState.var(2,2) estState.var(3,3)];
+    oriVar = estState.var(1,1);
     radiusEst = estConst.NominalWheelRadius;
-    radiusVar = estState.var(4);
+    radiusVar = estState.var(4,4);
     return;
 end
 
@@ -92,7 +90,7 @@ end
 % If we get this far tm is not equal to zero, and we are no longer
 % initializing.  Run the estimator.
 
-% prior update
+%%%%%% prior update %%%%%%%%
 % be aware that gamma is bounded
 delta_t = tm - estState.prev_t;
 r = estState.est(1);
@@ -101,30 +99,72 @@ y = estState.est(3);
 W = estState.est(4);
 u_v = actuate(1);
 u_r = actuate(2);
+Q_v = estConst.VelocityInputPSD;
+Q_r = estConst.AngleInputPSD;
 B = estConst.WheelBase;
 
-estState.est = estState.est + [ -delta_t * W * u_v * sin(u_r) / B;
-                                delta_t * W * u_v * cos(u_r) * cos(r);
-                                delta_t * W * u_v * cos(u_r) * sin(r);
+% integrate x'=q(x, u, 0, t), time step is T
+estState.est = estState.est + delta_t * [ -W * u_v * sin(u_r) / B;
+                                W * u_v * cos(u_r) * cos(r);
+                                W * u_v * cos(u_r) * sin(r);
                                 0 ];
-% Let A_t = dq / dx ,  L_t = dq / dv                    
+                            
+estState.est(1) = mod(estState.est(1), 2*pi);
+
+% Let A_t = dq / dx ,  L_t = dq / dv   , P_t the variance matrix of the states                
 A_t = [ 0                               0    0      -u_v * sin(u_r) / B;
         -W * u_v * cos(u_r) * sin(r)    0    0      u_v * cos(u_r) * cos(r);
         W * u_v * cos(u_r) * cos(r)     0    0      u_v * cos(u_r) * sin(r);
         0                               0    0              0               ];
-% integrate x'=q(x, u, 0, t), time step is T
-%Xp = estState.prev_Xm + []
 
-% measurement update
+L_t = [ -W * u_v * sin(u_r) / B         -W * u_v * cos(u_r) / B;
+        W * u_v * cos(u_r) * cos(r)     -W * u_v * sin(u_r) * cos(r);
+        W * u_v * cos(u_r) * sin(r)     -W * u_v * sin(u_r) * sin(r);
+                   0                                0               ]; 
 
+P_p = estState.var;
+P_p = P_p  +  A_t * P_p  +  P_p * transpose(A_t)  +  L_t * [Q_v 0; 0 Q_r] * transpose(L_t);
+              
+               
+%%%%%%% measurement update %%%%%%%%
+r_p = estState.est(1);
+x_p = estState.est(2);
+y_p = estState.est(3);
+W_p = estState.est(4);
+temp = sqrt(x_p^2 + y_p^2);
+R_r = estConst.CompassNoise;
+R_d = estConst.DistNoise;
 
+% Let H_k = dh / dx , M_k = dh / dw
+H_k = [ 1           0           0           0;
+        0        x_p/temp    y_p/temp       0 ];
+
+M_k = [ 1 0; 0 1];
+
+K_k = P_p * transpose(H_k) / (H_k * P_p * transpose(H_k) + M_k * [R_r 0; 0 R_d] * transpose(M_k));
+
+if sense(2)==Inf
+    sense(2) = r_p;
+end
+if sense(1) ==Inf
+    sense(1)=temp;
+end
+estState.est = estState.est + K_k * ([sense(2) - r_p; sense(1) - temp]);
+
+estState.var = (eye(4) - K_k*H_k)*P_p;
+% make sure the W_p doesnt't go out of bounds
+estState.est(4) = min(estState.est(4),0.15);
+estState.est(4) = max(estState.est(4),0.05);
+
+% change previous timestamp
+estState.prev_t = tm;
 
 % Replace the following:
-posEst = [0 0];
-oriEst = 0;
-posVar = [0 0];
-oriVar = 0;
-radiusEst = 0;
-radiusVar = 0;
+posEst = [estState.est(2) estState.est(2)];
+oriEst = estState.est(1);
+posVar = [estState.var(2,2) estState.var(3,3)];
+oriVar = estState.var(1,1);
+radiusEst = estState.est(4);
+radiusVar = estState.var(4,4);
 
 end
