@@ -75,10 +75,10 @@ if (tm == 0)
 %                       0   0.33  0     0;      % x variance
 %                       0     0  0.33   0;      % y variance
 %                       0     0   0     0.1 ] ;    % radius variance
-    estState.var = [ 0.05    0   0     0;       % orientation variance 
-                      0   0.4  0     0;      % x variance
-                      0     0  0.4   0;      % y variance
-                      0     0   0     0.0005 ] ;    % radius variance
+    estState.var = [ 0.8225    0    0     0;       % orientation variance 
+                      0     1/3   0     0;      % x variance
+                      0      0   1/3    0;      % y variance
+                      0      0    0     8.3333e-04 ] ;    % radius variance
     
     % Output
     posEst = [estState.est(2) estState.est(3)];
@@ -95,7 +95,10 @@ end
 % If we get this far tm is not equal to zero, and we are no longer
 % initializing.  Run the estimator.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%% prior update %%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 % be aware that gamma is bounded
 delta_t = tm - estState.prev_t;
 r = estState.est(1);
@@ -130,31 +133,40 @@ L_t = [ -W * u_v * sin(u_r) / B         -W * u_v * cos(u_r) / B;
 P_p = estState.var;
 P_p = P_p  +  delta_t * (A_t * P_p  +  P_p * transpose(A_t)  +  L_t * [Q_v 0; 0 Q_r] * transpose(L_t));
               
-               
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%% measurement update %%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 r_p = estState.est(1);
 x_p = estState.est(2);
 y_p = estState.est(3);
 W_p = estState.est(4);
 temp = sqrt(x_p^2 + y_p^2);
-R_r = estConst.CompassNoise;
-R_d = estConst.DistNoise;
+R_r = 0;%estConst.CompassNoise;
+R_d = 0;%estConst.DistNoise;
 
 % Let H_k = dh / dx , M_k = dh / dw
-H_k = [ 1           0           0           0;
-        0        x_p/temp    y_p/temp       0 ];
-
-M_k = [ 1 0; 0 1];
-
-K_k = P_p * transpose(H_k) / (H_k * P_p * transpose(H_k) + M_k * [R_r 0; 0 R_d] * transpose(M_k));
-
-if sense(2)==Inf
-    sense(2) = r_p;
+K_k=[];
+H_k=[];
+if sense(2)==Inf && sense(1)==Inf
+    H_k = 0;
+    K_k = 0;
+elseif sense(2) == Inf
+    H_k = [0        x_p/temp    y_p/temp       0 ];
+    M_k = [0 1];
+    K_k = P_p * transpose(H_k) / (H_k * P_p * transpose(H_k) + M_k * [R_r 0; 0 R_d] * transpose(M_k));
+    estState.est = estState.est + K_k * (sense(1) - temp);
+elseif sense(1) ==Inf
+    H_k = [1 0 0 0];
+    M_k = [1 0];
+    K_k = P_p * transpose(H_k) / (H_k * P_p * transpose(H_k) + M_k * [R_r 0; 0 R_d] * transpose(M_k));
+    estState.est = estState.est + (sense(2) - r_p) * K_k ; 
+else 
+    H_k = [ 1           0           0           0;
+            0        x_p/temp    y_p/temp       0 ];
+    M_k = [ 1 0; 0 1];
+    K_k = P_p * transpose(H_k) / (H_k * P_p * transpose(H_k) + M_k * [R_r 0; 0 R_d] * transpose(M_k));
+    estState.est = estState.est + K_k * ([sense(2) - r_p; sense(1) - temp]);
 end
-if sense(1) ==Inf
-    sense(1)=temp;
-end
-estState.est = estState.est + K_k * ([sense(2) - r_p; sense(1) - temp]);
 
 estState.var = (eye(4) - K_k*H_k)*P_p;
 % make sure the W_p doesnt't go out of bounds
