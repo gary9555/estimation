@@ -80,13 +80,14 @@ radiusEst = zeros(N,1);
 posVar = zeros(N,2);
 oriVar = zeros(N,1);
 radiusVar = zeros(N,1);
+
 [posEst(1,:),oriEst(1),radiusEst(1),posVar(1,:),oriVar(1),radiusVar(1),estState] = ...
-    Estimator(estState,zeros(1,2),zeros(1,2),0,estConst,1);
+    Estimator(estState,zeros(1,2),zeros(1,2),0,estConst);
 
 % Call the estimator for each time step.
 for n = 2:N
     [posEst(n,:),oriEst(n),radiusEst(n),posVar(n,:),oriVar(n),radiusVar(n),estState] = ...
-        Estimator(estState,input(n,:),sense(n,:),tm(n),estConst,n);
+        Estimator(estState,input(n,:),sense(n,:),tm(n),estConst);
 end
 
 
@@ -96,17 +97,19 @@ end
 
 % Calculate the total tracking error.
 % Replace the following:
-trackErrorNorm = 0;
+errorVector = loc(:,1:2) - posEst;
+errorVector = errorVector(:);
+trackErrorNorm = rms(errorVector)
 
 if doplot
     % Add your plots here to debug the estimator and verify your
     % implementation.
     %%% plot x %%%%
-%     figure(1);
-%     plot(loc(1:N,(1)),'-g');
-%     hold;
-%     plot(posEst(1:N,(1)),'-r');
-     
+    figure(1);
+    plot(loc(1:N,(1)),'-g');
+    hold;
+    plot(posEst(1:N,(1)),'-r');
+      
     %%% plot r %%%
 %     figure(2);
 %     plot(loc(1:N,(3)),'-g');
@@ -114,16 +117,15 @@ if doplot
 %     plot(oriEst,'-r');
     
     %%% plot 2d position %%%
-%     figure(3);
-%     plot(loc(1:N,(1)),loc(1:N,(2)),'-g');
-%     hold;
-%     plot(posEst(1:N,(1)),posEst(1:N,(2)),'-r');
+    figure(3);
+    plot(loc(1:N,(1)),loc(1:N,(2)),'-g');
+    hold;
+    plot(posEst(1:N,(1)),posEst(1:N,(2)),'-r');
 
     %%% plot x variance %%%
-    figure(4);
-    plot(posVar(1:N,(1)),'-g');
+      figure(4);
+      plot(posVar(1:N,(1)),'-g');
 end
     
 return;
 
-    
