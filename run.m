@@ -97,9 +97,11 @@ end
 
 % Calculate the total tracking error.
 % Replace the following:
-errorVector = loc(:,1:2) - posEst;
-errorVector = errorVector(:);
-trackErrorNorm = rms(errorVector)
+errorVecX = loc(:,1) - posEst(:,1);
+errorVecY = loc(:,2) - posEst(:,2);
+
+
+trackErrorNorm = sqrt(sum(errorVecX.'*errorVecX + errorVecY.'*errorVecY) / N)
 
 if doplot
     % Add your plots here to debug the estimator and verify your
@@ -128,4 +130,3 @@ if doplot
 end
     
 return;
-
