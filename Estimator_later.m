@@ -1,4 +1,4 @@
-function [posEst,oriEst,radiusEst, posVar,oriVar,radiusVar,estState] = Estimator(estState,actuate,sense,tm,estConst)
+function [posEst,oriEst,radiusEst, posVar,oriVar,radiusVar,estState, predictVar] = Estimator(estState,actuate,sense,tm,estConst)
 % [posEst,oriEst,posVar,oriVar,baseEst,baseVar,estState] =
 % 	Estimator(estState,actuate,sense,tm,knownConst,designPart)
 %
@@ -79,7 +79,7 @@ if (tm == 0)
                       0     1/3   0     0;      % x variance
                       0      0   1/3    0;      % y variance
                       0      0    0     8.3333e-04 ] ;    % radius variance
-    
+
     % Output
     posEst = [estState.est(2) estState.est(3)];
     oriEst = estState.est(1);
@@ -112,48 +112,45 @@ B = estConst.WheelBase;
 % integrate x'=q(x, u, 0, t), time step is T
 %length(estState.est)
 
-odefun = @(t, est) [ -est(4) * u_v * sin(u_r) / B; est(4) * u_v * cos(u_r) * cos(est(1)); est(4) * u_v * cos(u_r) * sin(est(1)); 0 ];
-[~, x] = ode45(odefun, [estState.prev_t  tm], estState.est);
+% odefun = @(t, est) [ -est(4) * u_v * sin(u_r) / B; est(4) * u_v * cos(u_r) * cos(est(1)); est(4) * u_v * cos(u_r) * sin(est(1)); 0 ];
+% [~, x] = ode45(odefun, [estState.prev_t  tm], estState.est);
+% 
+% % estState.est = estState.est + delta_t * [ -W * u_v * sin(u_r) / B;
+% %                                 W * u_v * cos(u_r) * cos(r);
+% %                                 W * u_v * cos(u_r) * sin(r);
+% %                                 0 ];
+% x(end,1) = mod(x(end,1), 2*pi);
+% estState.est = transpose(x(end,:));
+% 
+% % Let A_t = dq / dx ,  L_t = dq / dv   , P_t the variance matrix of the states                
+% global A_t;
+% A_t = [ 0                               0    0      -u_v * sin(u_r) / B;
+%         -W * u_v * cos(u_r) * sin(r)    0    0      u_v * cos(u_r) * cos(r);
+%         W * u_v * cos(u_r) * cos(r)     0    0      u_v * cos(u_r) * sin(r);
+%         0                               0    0              0               ];
+% 
+% global L_t;
+% L_t = [ -W * u_v * sin(u_r) / B         -W * u_v * cos(u_r) / B;
+%         W * u_v * cos(u_r) * cos(r)     -W * u_v * sin(u_r) * cos(r);
+%         W * u_v * cos(u_r) * sin(r)     -W * u_v * sin(u_r) * sin(r);
+%                    0                                0               ]; 
 
-% estState.est = estState.est + delta_t * [ -W * u_v * sin(u_r) / B;
-%                                 W * u_v * cos(u_r) * cos(r);
-%                                 W * u_v * cos(u_r) * sin(r);
-%                                 0 ];
-x(end,1) = mod(x(end,1), 2*pi);
-estState.est = transpose(x(end,:));
-
-% Let A_t = dq / dx ,  L_t = dq / dv   , P_t the variance matrix of the states                
-global A_t;
-A_t = [ 0                               0    0      -u_v * sin(u_r) / B;
-        -W * u_v * cos(u_r) * sin(r)    0    0      u_v * cos(u_r) * cos(r);
-        W * u_v * cos(u_r) * cos(r)     0    0      u_v * cos(u_r) * sin(r);
-        0                               0    0              0               ];
-
-global L_t;
-L_t = [ -W * u_v * sin(u_r) / B         -W * u_v * cos(u_r) / B;
-        W * u_v * cos(u_r) * cos(r)     -W * u_v * sin(u_r) * cos(r);
-        W * u_v * cos(u_r) * sin(r)     -W * u_v * sin(u_r) * sin(r);
-                   0                                0               ]; 
-
-global Q_c;
 Q_c = [ estConst.VelocityInputPSD   0;
                     0               estConst.AngleInputPSD];
                
-% odefun2 = @(t, var) [Q_v*L_t(1,1)*L_t(1,1)+Q_r*L_t(1,2)*L_t(1,2)                    var(1,1)*A_t(2,1)+Q_v*L_t(1,1)*L_t(2,1)+Q_r*L_t(1,2)*L_t(2,2)   var(1,1)*A_t(3,1)+Q_v*L_t(1,1)*L_t(3,1)+Q_r*L_t(1,2)*L_t(3,2)     A_t(1,4)*var(4,4)+Q_v*L_t(1,1)*L_t(4,1)+Q_r*L_t(1,2)*L_t(4,2);
-%                      A_t(1,1)*var(1,1)+Q_v*L_t(2,1)*L_t(1,1)+Q_r*L_t(2,2)*L_t(1,2)  Q_v*L_t(2,1)*L_t(2,1)+Q_r*L_t(2,2)*L_t(2,2)                     Q_v*L_t(2,1)*L_t(3,1)+Q_r*L_t(2,2)*L_t(3,2)                       A_t(2,4)*var(4,4)+Q_v*L_t(2,1)*L_t(4,1)+Q_r*L_t(2,2)*L_t(4,2);
-%                      A_t(3,1)*var(1,1)+Q_v*L_t(3,1)*L_t(1,1)+Q_r*L_t(3,2)*L_t(1,2)  Q_v*L_t(3,1)*L_t(2,1)+Q_r*L_t(3,2)*L_t(2,2)                     Q_v*L_t(3,1)*L_t(3,1)+Q_r*L_t(3,2)*L_t(3,2)                       A_t(3,4)*var(4,4)+Q_v*L_t(3,1)*L_t(4,1)+Q_r*L_t(3,2)*L_t(4,2);
-%                      A_t(1,4)*var(4,4)+Q_v*L_t(4,1)*L_t(1,1)+Q_r*L_t(4,2)*L_t(1,2)  A_t(2,4)*var(4,4)+Q_v*L_t(4,1)*L_t(2,1)+Q_r*L_t(4,2)*L_t(2,2)   A_t(3,4)*var(4,4)+Q_v*L_t(4,1)*L_t(3,1)+Q_r*L_t(4,2)*L_t(3,2)     Q_v*L_t(4,1)*L_t(4,1)+Q_r*L_t(4,2)*L_t(4,2) ];
-%odefun2 = @(t, var) (A_t * var  +  var * transpose(A_t)  +  L_t * Q_c * transpose(L_t)); 
 %[~, y] = ode45(odefun2, [estState.prev_t  tm], estState.var);
+state = estState.est(:);
 P_p = estState.var(:);
-[~, X] = ode45(@(t,X)mRiccati(t, X, A_t, L_t, Q_c), [0 10], P_p); 
-P_p = reshape((X(end,:)), [4 4]);
-%[~,y1,y2,y3,y4]=ode45(@odefun2, [estState.prev_t  tm], P_p(:,1), P_p(:,2), P_p(:,3), P_p(:,4));
+X = [state;P_p];
+[~, X] = ode45(@(t,X)mRiccati(t, X, u_v, u_r, B, Q_c), [estState.prev_t  tm], X); 
+X = reshape((X(end,:)), [4 5]);
+estState.est = X(:,1);
+P_p = X(:,2:5);
 %P_p = P_p  +  delta_t * (A_t * P_p  +  P_p * transpose(A_t)  +  L_t * Q_c * transpose(L_t));
-
+predictVar = P_p(2,2);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%% measurement update %%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 r_p = estState.est(1);
 x_p = estState.est(2);
 y_p = estState.est(3);
@@ -177,7 +174,7 @@ elseif sense(1) ==Inf   % no z_d value
     H_k = [1 0 0 0];
     M_k = [1 0];
     K_k = P_p * transpose(H_k) / (H_k * P_p * transpose(H_k) + M_k * [R_r 0; 0 R_d] * transpose(M_k));
-    estState.est = estState.est + (sense(2) - r_p) * K_k ; 
+    estState.est = estState.est + K_k * (sense(2) - r_p); 
 else 
     H_k = [ 1           0           0           0;
             0        x_p/temp    y_p/temp       0 ];
@@ -202,21 +199,28 @@ oriVar = estState.var(1,1);
 radiusEst = estState.est(4);
 radiusVar = estState.var(4,4);
 end
+
 %%
-function [x1, x2, x3, x4]=odefun2(t, x1, x2, x3, x4)
-    global A_t;
-    global L_t;
-    global Q_c;       
-    xp = [x1 x2 x3 x4];
-    xp =  A_t * xp  +  xp * transpose(A_t)  +  L_t * Q_c * transpose(L_t);
-    x1 = xp(:,(1));
-    x2 = xp(:,(2));
-    x3 = xp(:,(3));
-    x4 = xp(:,(4));
-end
-%%
-function dXdt = mRiccati(t, X, A, L, Q)
-X = reshape(X, size(A));        %Convert from "n^2"-by-1 to "n"-by-"n"
-dXdt = A*X + X*A.' + L*Q*L.';   %Determine derivative
+function dXdt = mRiccati(t, X, u_v, u_r, B, Q)
+X = reshape(X, [4 5]);%Convert from "n^2"-by-1 to "n"-by-"n"
+est = X(:,1);
+W = est(4);
+r = est(1);
+var = X(:,2:5);
+dXdt = zeros(4,5);
+dXdt(:,1) = [ -est(4) * u_v * sin(u_r) / B; est(4) * u_v * cos(u_r) * cos(est(1)); est(4) * u_v * cos(u_r) * sin(est(1)); 0 ];
+
+A = [ 0                               0    0      -u_v * sin(u_r) / B;
+        -W * u_v * cos(u_r) * sin(r)    0    0      u_v * cos(u_r) * cos(r);
+        W * u_v * cos(u_r) * cos(r)     0    0      u_v * cos(u_r) * sin(r);
+        0                               0    0              0               ];
+
+L = [ -W * u_v * sin(u_r) / B         -W * u_v * cos(u_r) / B;
+        W * u_v * cos(u_r) * cos(r)     -W * u_v * sin(u_r) * cos(r);
+        W * u_v * cos(u_r) * sin(r)     -W * u_v * sin(u_r) * sin(r);
+                   0                                0               ]; 
+
+ 
+dXdt(:,2:5) = A*var + var*A.' + L*Q*L.';   %Determine derivative
 dXdt = dXdt(:);                 %Convert from "n"-by-"n" to "n^2"-by-1
 end
