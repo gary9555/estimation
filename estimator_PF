@@ -91,10 +91,79 @@ else
     %%%%%%%% measurement update %%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    for i=1:nParticles
+    % if one of the sensor has value, do the measurement update
+    if sense(1)~=Inf || sense(2)~=Inf
         
+        weight = zeros(1, nParticles);
+        % have value from both sensors
+        if sense(1) ~= Inf && sense(2) ~= Inf   
+
+            for i=1:nParticles
+                weight1 = zeros(1, nParticles);
+                weight2 = zeros(1, nParticles);
+                dist = abs(abs(knownConst.SensorLoc - sin(estState.theta(i))) - sense(1));
+                if dist<knownConst.SensorErr
+                    weight1(i) = 1/(knownConst.SensorErr)^2 * (knownConst.SensorErr -dist);
+                end
+
+                if estState.plane(i) == sense(2)
+                    weight2(i) = knownConst.HalfPlaneErr;
+                else
+                    weight2(i) = 1 - knownConst.HalfPlaneErr; 
+                end
+            end
+
+            weight = weight1.*weight2;
+            
+        % have value only from the distance sensor
+        elseif sense(1) ~= Inf
+            for i=1:nParticles
+                dist = abs(abs(knownConst.SensorLoc - sin(estState.theta(i))) - sense(1));
+                if dist<knownConst.SensorErr
+                    weight(i) = 1/(knownConst.SensorErr)^2 * (knownConst.SensorErr -dist);
+                end
+            end
+            
+        % have value only from the half plane sensor
+        else
+            if estState.plane(i) == sense(2)
+                weight(i) = knownConst.HalfPlaneErr;
+            else
+                weight(i) = 1 - knownConst.HalfPlaneErr; 
+            end
+            
+        end
+        
+        weight = weight / sum(weight);
+        
+        state = estState;
+        for j = 1:nParticles
+            r = rand;
+            sum_weight =0;
+            for k = 1:nParticles
+                sum_weight = sum_weight + weight(k);
+                if sum_weight >= r
+                    estState.theta(j) = state.theta(k);
+                    estState.plane(j) = state.plane(k);
+                    estState.bias(j) = state.bias(k);
+                    break;
+                end
+            end
+        end
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        %%%%%%%%%%% Resampling %%%%%%%%%%%%%%%
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        %%%%%%%%%%% Roughening %%%%%%%%%%%%%%%
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
     end
+    
+    
+    
+    
     
 end
 
@@ -107,3 +176,5 @@ upDownParticles = estState.plane;
 biasParticles = estState.bias;
 
 end
+
+
