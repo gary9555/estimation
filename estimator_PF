@@ -167,10 +167,10 @@ else
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         K1 = 0.01; % Tuning parameter for theta roughening
         K2 = 0.01; % Tuning parameter for half plane roughening
-        K3 = 1; % Tuning parameter for bias roughening
-        sigma1 = K1 * (max(estState.theta) - min(estState.theta)) * nParticles^(1/3);
+        K3 = 0.015; % Tuning parameter for bias roughening
+        sigma1 = K1 * (max(estState.theta) - min(estState.theta)) * nParticles^(1/3);        
         sigma2 = K2 * (max(estState.plane) - min(estState.plane)) * nParticles^(1/3);
-        sigma3 = K3 * (max(estState.bias) - min(estState.bias)) * nParticles^(1/3);
+        sigma3 = 0.01;%K3 * (max(estState.bias) - min(estState.bias)) * nParticles^(1/3);
         
         for i = 1: nParticles            
             estState.theta(i) = estState.theta(i) + normrnd(0, sigma1);
@@ -183,8 +183,8 @@ else
                 estState.plane(i) = -1;
             end
             estState.bias(i) = estState.bias(i) + normrnd(0, sigma3);
-            estState.bias(i) = max(estState.bias(i), -2*knownConst.MotionErr);
-            estState.bias(i) = min(estState.bias(i), 2 * knownConst.MotionErr);
+            estState.bias(i) = max(estState.bias(i), -knownConst.MotionErr);
+            estState.bias(i) = min(estState.bias(i), knownConst.MotionErr);
         end
     end
     
