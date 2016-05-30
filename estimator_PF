@@ -1,0 +1,109 @@
+function [locationParticles, upDownParticles, biasParticles, estState]...
+                        = Estimator(estState, sense, actuate, t, knownConst)
+% [locationParticles, upDownParticles, biasParticles, estState]
+%                       = Estimator(estState,sense,actuate,t,knownConst)
+% 
+% The estimator.
+% The function will be called in two different modes:
+% If t==0, the estimator is initialized; otherwise the estimator does an 
+% iteration step (compute particles for the time t).
+%
+% Inputs:
+%   estState            previous estimator state (time t-1)
+%                       **may be defined by the user (for example as a
+%                       struct)**
+%   sense               sensor measurements at time t, [1x2]-vector,
+%                       INF if no measurement
+%                       sense(1): distance sensor measurement
+%                       sense(2): half-plane sensor measurement
+%   actuate             control input at time t, scalar
+%   t                   time, scalar
+%                       If t==0 initialization, otherwise estimator
+%                       iteration step.
+%   knownConst          known constants (from KnownConstants.m)
+%
+% Outputs:
+%   locationParticles   particles representing the estimate of theta
+%                       the particle angle at time t
+%                       [1 x knownConst.NumParticles]-vector
+%   upDownParticles     particles representing the estimate of phi, which
+%                       indicates whether the object is on the upper (1) or
+%                       lower(-1) circle, at time t
+%                       [1 x knownConst.NumParticles]-vector
+%                       Must contain *only* values +1 or -1.
+%   biasParticles       particles representing the estimate of the bias b at time t
+%                       [1 x knownConst.NumParticles]-vector
+%   estState            current estimator state at time t
+%                       **will be input to this function at the next call**
+%
+%       
+% Class:
+% Introduction to Recursive Filtering and Estimation
+% Spring 2016
+% Programming Exercise 2
+%
+% --
+% ETH Zurich
+% Institute for Dynamic Systems and Control
+% Raffaello D'Andrea, Markus Hehn, Max Kriegleder
+%
+
+nParticles = knownConst.NumParticles;
+keepSide = knownConst.sideKeepingPreference;  % probability of staying on the original 
+                                             % circle when reaching the intersection point
+                                             
+if (t == 0)
+    %% Mode 1: Initialization
+    % Do the initialization of your estimator here!
+    
+    estState.theta = zeros(1,nParticles);
+    estState.plane = zeros(1,nParticles);
+    estState.bias = zeros(1,nParticles);
+    for i=1:nParticles
+        estState.theta(i) = UniformMinMax(0,2*pi);
+        estState.plane(i) = -1+(rand>0.5)*2;
+        estState.bias(i) = Uniform(knownConst.MotionErr);       
+    end
+    
+    
+else
+    %% Mode 2: Estimator iteration.
+    % If we get this far t is not equal to zero, and we are no longer
+    % initializing.  Run the estimator.
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%% prior update %%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%     
+    for i=1:nParticles
+       s = estState.bias(i) + Uniform(knownConst.MotionErr); % process noise
+       theta = estState.theta(i) + actuate + s;
+      
+       % decide if we wanna switch circles when reaching the intersection
+       % point
+       if theta >= 2*pi || theta < 0
+           if rand > knownConst.sideKeepingPreference
+              estState.plane(i) = -1 * estState.plane(i); 
+           end
+       end
+       estState.theta(i) = mod(theta, 2*pi);   
+    end  
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%% measurement update %%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    for i=1:nParticles
+        
+        
+    end
+    
+end
+
+% change the previous time to the current time
+estState.prev_t = t;
+
+%% Output
+locationParticles = estState.theta;
+upDownParticles = estState.plane;
+biasParticles = estState.bias;
+
+end
